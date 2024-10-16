@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -95,6 +96,19 @@ func check(args *skel.CmdArgs) error {
 	return p.check()
 }
 
+type CNIConfig struct {
+	Name       string   `json:"name"`
+	CNIVersion string   `json:"cniVersion"`
+	Plugins    []Plugin `json:"plugins"`
+}
+
+type Plugin struct {
+	Type string `json:"type"`
+	UID  *int   `json:"uid,omitempty"`
+	GID  *int   `json:"gid,omitempty"`
+	Tun  string `json:"tun,omitempty"`
+}
+
 func newPlugin(args *skel.CmdArgs) (*plugin, error) {
 	if args.IfName == "" {
 		return nil, errors.New("no device to redirect with was found, was IfName specified?")
@@ -161,7 +175,35 @@ func newPlugin(args *skel.CmdArgs) (*plugin, error) {
 		plugin.tapGID = tapGID
 	}
 
+	pConfig := getConfig(args.StdinData)
+	if pConfig != nil {
+		if pConfig.Tun != "" {
+			plugin.tapName = pConfig.Tun
+		}
+		if pConfig.UID != nil {
+			plugin.tapUID = *pConfig.UID
+		}
+		if pConfig.GID != nil {
+			plugin.tapGID = *pConfig.GID
+		}
+	}
+
 	return plugin, nil
+}
+
+func getConfig(data []byte) *Plugin {
+	var config CNIConfig
+	if err := json.Unmarshal([]byte(data), &config); err != nil {
+		log.Fatalf("Error parsing JSON: %v", err)
+	}
+
+	for _, plugin := range config.Plugins {
+		if plugin.Type == "tc-redirect-tap" {
+			return &plugin
+		}
+	}
+
+	return nil
 }
 
 func getCurrentResult(args *skel.CmdArgs) (*current.Result, error) {
