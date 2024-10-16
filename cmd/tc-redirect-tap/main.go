@@ -96,17 +96,13 @@ func check(args *skel.CmdArgs) error {
 	return p.check()
 }
 
-type CNIConfig struct {
-	Name       string   `json:"name"`
-	CNIVersion string   `json:"cniVersion"`
-	Plugins    []Plugin `json:"plugins"`
-}
-
-type Plugin struct {
-	Type string `json:"type"`
-	UID  *int   `json:"uid,omitempty"`
-	GID  *int   `json:"gid,omitempty"`
-	Tun  string `json:"tun,omitempty"`
+type PluginConfig struct {
+	CniVersion string `json:"cniVersion"`
+	GID        *int   `json:"gid"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	UID        *int   `json:"uid"`
+	Tun        string `json:"tun,omitempty"` // Add Tun field in case it exists in the future
 }
 
 func newPlugin(args *skel.CmdArgs) (*plugin, error) {
@@ -175,32 +171,31 @@ func newPlugin(args *skel.CmdArgs) (*plugin, error) {
 		plugin.tapGID = tapGID
 	}
 
-	pConfig := getConfig(args.StdinData)
-	if pConfig != nil {
-		if pConfig.Tun != "" {
-			plugin.tapName = pConfig.Tun
+	pluginConfig := getPluginConfig(args.StdinData)
+	if pluginConfig != nil {
+		if pluginConfig.Tun != "" {
+			plugin.tapName = pluginConfig.Tun
 		}
-		if pConfig.UID != nil {
-			plugin.tapUID = *pConfig.UID
+		if pluginConfig.UID != nil {
+			plugin.tapUID = *pluginConfig.UID
 		}
-		if pConfig.GID != nil {
-			plugin.tapGID = *pConfig.GID
+		if pluginConfig.GID != nil {
+			plugin.tapGID = *pluginConfig.GID
 		}
 	}
 
 	return plugin, nil
 }
 
-func getConfig(data []byte) *Plugin {
-	var config CNIConfig
-	if err := json.Unmarshal([]byte(data), &config); err != nil {
+func getPluginConfig(data []byte) *PluginConfig {
+	var pluginConfig PluginConfig
+	if err := json.Unmarshal([]byte(data), &pluginConfig); err != nil {
 		log.Fatalf("Error parsing JSON: %v", err)
 	}
 
-	for _, plugin := range config.Plugins {
-		if plugin.Type == "tc-redirect-tap" {
-			return &plugin
-		}
+	if pluginConfig.Type == "tc-redirect-tap" {
+
+		return &pluginConfig
 	}
 
 	return nil
